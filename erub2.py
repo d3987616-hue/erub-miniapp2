@@ -33,13 +33,13 @@ class ErubBot:
             parse_mode="Markdown"
         )
 
-        await update.message.reply_text(
-            f"👋 Привет, {user.first_name}!",
-            reply_markup=ReplyKeyboardMarkup(
-                [[KeyboardButton("🔑 Войти", web_app=WebAppInfo(url=WEB_APP_URL))]],
-                resize_keyboard=True
-            )
-        )
+await update.message.reply_text(
+    f"👋 Привет, {user.first_name}!\n\nНажмите кнопку ВНИЗУ, чтобы открыть приложение eRub.\n\nЕсли Вы ещё не зарегистрированы в eRub, выберите Вход через E-ID.",
+    reply_markup=ReplyKeyboardMarkup(
+        [[KeyboardButton("🔑 Войти", web_app=WebAppInfo(url=WEB_APP_URL))]],
+        resize_keyboard=True
+    )
+)
 
     # ===== 2. Обработка всех сообщений =====
     async def handle(self, update: Update, context):
