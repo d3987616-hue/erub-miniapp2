@@ -7,7 +7,7 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Mess
 
 # ==================== КОНФИГ ====================
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN", "ТОКЕН_ВТОРОГО_БОТА")
-GROUP_CHAT_ID = -1005362277607  # ← ID ГРУППЫ (с минусом!)
+GROUP_CHAT_ID = -1004457031723  # ← ID ГРУППЫ (с минусом!)
 WEB_APP_URL = "https://d3987616-hue.github.io/erub-miniapp2/"
 # ===============================================
 
