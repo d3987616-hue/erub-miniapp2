@@ -5,7 +5,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Keyboar
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
 # ==================== КОНФИГ ====================
-BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN", "8828808036:AAGzAjdmb66RfnNO_60Y9lvTE53iVtNQ9Cg")
+BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GROUP_CHAT_ID = -1005362277607  # ← СЮДА ВСТАВЬ ID ГРУППЫ (с минусом!)
 WEB_APP_URL = "https://d3987616-hue.github.io/erub-miniapp2/"
 # ===============================================
